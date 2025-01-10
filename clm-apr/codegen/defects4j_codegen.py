@@ -121,24 +121,45 @@ def defects4j_codegen_output(input_file, output_file, num_output=10):
     # 使用命令行参数指定模型路径
     model_path = '/root/autodl-tmp/CodeLlama-13B-Instruct-GPTQ'
     if len(sys.argv) > 1:
-        model_path = '/root/autodl-tmp/codellama_finetune/' + sys.argv[1][1:] + '/codellama_merged'
+        model_path = '/root/autodl-tmp/codellama_finetune/' + sys.argv[1] + '/codellama_merged'
     
     print(f"Loading model from: {model_path}")
     
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-    model = AutoGPTQForCausalLM.from_pretrained(
-        model_path,
-        device_map="auto",
-        trust_remote_code=True
+    model = AutoModelForCausalLM.from_pretrained(
+        model_path, 
+        device_map="cuda:" + sys.argv[2] if len(sys.argv) > 2 else "auto",
+        load_in_8bit=True
     )
-    
-    # 创建pipeline
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
     pipe = pipeline("text-generation", model=model, tokenizer=tokenizer)
-    
-    # 如果指定了GPU设备
-    if len(sys.argv) > 4:
-        model.to(f'cuda:{sys.argv[4]}')
-
+    # 处理每个输入样本
+    for filename in codegen_output['data']:
+        print(f"Processing {filename}...")
+        input_text = codegen_output['data'][filename]['input']
+        
+        # 生成多个输出
+        outputs = []
+        for _ in range(num_output):
+            response = pipe(
+                input_text,
+                max_length=2048,
+                num_return_sequences=1,
+                temperature=0.7,
+                top_p=0.95,
+                do_sample=True
+            )[0]['generated_text']
+            
+            # 只保留生成的部分（去掉输入部分）
+            generated_code = response[len(input_text):].strip()
+            outputs.append(generated_code)
+            
+        # 保存生成结果
+        codegen_output['data'][filename]['output'] = outputs
+        
+    # 写入输出文件
+    print(f"Writing results to {output_file}")
+    with open(output_file, 'w') as f:
+        json.dump(codegen_output, f, indent=2)
 
 if __name__ == '__main__':
     for i, config in enumerate(CodeGenInputConfig):
