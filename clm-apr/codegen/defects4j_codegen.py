@@ -139,7 +139,8 @@ def defects4j_codegen_output(input_file, output_file, num_output=10):
         
         # 生成多个输出
         outputs = []
-        for _ in range(num_output):
+        for i in range(num_output):
+            print(f"Generating output {i+1}/{num_output}")
             # 构建 prompt
             prompt = f"[INST] This is an incorrect code({filename}):\n```java\n{code}\n```\nYou are a software engineer. Can you repair the incorrect code?\n[/INST]\n```java\n"
             print(f"Prompt: {prompt}", flush=True)
@@ -149,30 +150,36 @@ def defects4j_codegen_output(input_file, output_file, num_output=10):
             max_d = 500 - cnt
             
             while True:
-                response = pipe(
-                    prompt,
-                    min_length=cnt+64,
-                    max_length=cnt+max_d,
-                    temperature=1.0,
-                    do_sample=True
-                )[0]['generated_text']
-                
-                # 提取生成的代码
                 try:
-                    print('response:', response)
-                    generated_code = response.split('[/INST]')[1].strip()
-                    if generated_code.startswith('```java\n'):
-                        generated_code = generated_code[8:]
-                    if generated_code.endswith('```'):
-                        generated_code = generated_code[:-3]
-                    generated_code = generated_code.strip()
+                    response = pipe(
+                        prompt,
+                        min_length=cnt+64,
+                        max_length=cnt+max_d,
+                        temperature=1.0,
+                        do_sample=True
+                    )[0]['generated_text']
                     
-                    if generated_code != '':
-                        break
+                    print('Full response:', response)
+                    
+                    # 提取生成的代码
+                    if '[/INST]' in response:
+                        generated_code = response.split('[/INST]')[1].strip()
+                        if generated_code.startswith('```java\n'):
+                            generated_code = generated_code[8:]
+                        if generated_code.endswith('```'):
+                            generated_code = generated_code[:-3]
+                        generated_code = generated_code.strip()
+                        
+                        if generated_code and not generated_code.isspace():
+                            print(f"Generated code: {generated_code}")
+                            outputs.append(generated_code)
+                            break
+                    
                 except Exception as e:
-                    print(f"Error processing {filename}: {e}")
+                    print(f"Error in generation: {e}")
                     pass
                 
+                print(f"Retrying with increased length...")
                 max_d = min(2000 - cnt, max_d + 500)
             
             outputs.append(generated_code)
