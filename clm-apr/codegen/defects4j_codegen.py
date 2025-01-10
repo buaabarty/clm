@@ -147,7 +147,7 @@ def defects4j_codegen_output(input_file, output_file, num_output=10):
             
             # 计算 token 长度以控制生成长度
             cnt = len(tokenizer.tokenize(prompt))
-            max_d = 500 - cnt
+            max_d = 2048 - cnt
             
             while True:
                 try:
