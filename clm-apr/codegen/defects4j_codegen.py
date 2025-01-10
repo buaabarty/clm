@@ -135,14 +135,20 @@ def defects4j_codegen_output(input_file, output_file, num_output=10):
     # 处理每个输入样本
     for filename in codegen_output['data']:
         print(f"Processing {filename}...")
-        code = codegen_output['data'][filename]['input']
+        input_data = codegen_output['data'][filename]
+        
+        # 从输入中提取各个部分
+        code = input_data['input']
+        function_before = code.split('// buggy lines start:\n')[0]
+        buggy_line = code.split('// buggy lines start:\n')[1].split('// buggy lines end:\n')[0]
+        function_after = code.split('// buggy lines end:\n')[1].split('// fixed lines:')[0]
         
         # 生成多个输出
         outputs = []
         for i in range(num_output):
             print(f"Generating output {i+1}/{num_output}")
-            # 构建 prompt
-            prompt = f"[INST] This is an incorrect code({filename}):\n```java\n{code}\n```\nYou are a software engineer. Can you repair the incorrect code?\n[/INST]\n```java\n"
+            # 构建 prompt，包含注释标记
+            prompt = f"[INST] This is an incorrect code({filename}):\n```java\n{function_before}// buggy lines start:\n{buggy_line}// buggy lines end:\n{function_after}// fixed lines:\n```\nYou are a software engineer. Can you repair the incorrect code?\n[/INST]\n```java\n"
             print(f"Prompt: {prompt}", flush=True)
             
             # 计算 token 长度以控制生成长度
@@ -170,7 +176,7 @@ def defects4j_codegen_output(input_file, output_file, num_output=10):
                             generated_code = generated_code[:-3]
                         generated_code = generated_code.strip()
                         
-                        if generated_code and not generated_code.isspace():
+                        if generated_code and not generated_code.isspace() and len(generated_code) > 10:
                             print(f"Generated code: {generated_code}")
                             outputs.append(generated_code)
                             break
@@ -180,9 +186,11 @@ def defects4j_codegen_output(input_file, output_file, num_output=10):
                     pass
                 
                 print(f"Retrying with increased length...")
-                max_d = min(2000 - cnt, max_d + 500)
-            
-            outputs.append(generated_code)
+                max_d = min(4096 - cnt, max_d + 500)
+                
+                if max_d > 4096 - cnt:
+                    print("Reached maximum length limit, skipping...")
+                    break
             
         # 保存生成结果
         codegen_output['data'][filename]['output'] = outputs
