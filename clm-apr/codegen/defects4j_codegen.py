@@ -159,6 +159,7 @@ def defects4j_codegen_output(input_file, output_file, num_output=10):
                 
                 # 提取生成的代码
                 try:
+                    print('response:', response)
                     generated_code = response.split('[/INST]')[1].strip()
                     if generated_code.startswith('```java\n'):
                         generated_code = generated_code[8:]
@@ -168,7 +169,8 @@ def defects4j_codegen_output(input_file, output_file, num_output=10):
                     
                     if generated_code != '':
                         break
-                except:
+                except Exception as e:
+                    print(f"Error processing {filename}: {e}")
                     pass
                 
                 max_d = min(2000 - cnt, max_d + 500)
