@@ -6,6 +6,16 @@ import re
 import subprocess
 from codegen_config import CodeGenInputConfig
 from transformers import AutoTokenizer, AutoModelForCausalLM
+from pathlib import Path
+from transformers import pipeline
+from transformers import (
+    AutoModelForCausalLM, 
+    AutoTokenizer, 
+    AutoModelForSeq2SeqLM, 
+    BitsAndBytesConfig, 
+    AutoTokenizer
+)
+from auto_gptq import AutoGPTQForCausalLM, BaseQuantizeConfig
 
 CODEGEN_DIR = os.path.abspath(__file__)[: os.path.abspath(__file__).rindex('/') + 1]
 JAVA_DIR = CODEGEN_DIR + '../../jasper/'
@@ -97,7 +107,6 @@ def defects4j_codegen_output(input_file, output_file, num_output=10):
         import auto_gptq
     except ImportError:
         print("Installing required packages...")
-        # 使用预编译的wheel包
         subprocess.check_call([
             sys.executable, 
             "-m", 
@@ -108,40 +117,27 @@ def defects4j_codegen_output(input_file, output_file, num_output=10):
         ])
         
     codegen_output = json.load(open(input_file, 'r'))
-    codegen_output['model'] = 'Qwen2.5-Coder-0.5B'
     
-    tokenizer = AutoTokenizer.from_pretrained("/root/autodl-tmp/CodeLlama-13B-Instruct-GPTQ", trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained("/root/autodl-tmp/CodeLlama-13B-Instruct-GPTQ", trust_remote_code=True)
-    model.to('cuda:0')
+    # 使用命令行参数指定模型路径
+    model_path = '/root/autodl-tmp/CodeLlama-13B-Instruct-GPTQ'
+    if len(sys.argv) > 1:
+        model_path = '/root/autodl-tmp/codellama_finetune/' + sys.argv[1][1:] + '/codellama_merged'
     
-    for filename in codegen_output['data']:
-        text = codegen_output['data'][filename]['input']
-        print('generating', filename)
-        
-        try:
-            input_ids = tokenizer(text, return_tensors="pt").input_ids.to('cuda:0')
-            if input_ids.size(1) >= 768:
-                print('input too long:', input_ids.size(1), 'skip')
-                continue
-
-            generated_ids = model.generate(
-                input_ids,
-                max_new_tokens=512,
-                num_beams=num_output,
-                num_return_sequences=num_output,
-                early_stopping=True,
-                pad_token_id=tokenizer.pad_token_id,
-                eos_token_id=tokenizer.eos_token_id
-            )
-            output = []
-            for generated_id in generated_ids:
-                output.append(tokenizer.decode(generated_id, skip_special_tokens=True))
-        except Exception as e:
-            print(f"Error during generation: {e}")
-            output = []
-            
-        codegen_output['data'][filename]['output'] = output
-        json.dump(codegen_output, open(output_file, 'w'), indent=2)
+    print(f"Loading model from: {model_path}")
+    
+    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    model = AutoGPTQForCausalLM.from_pretrained(
+        model_path,
+        device_map="auto",
+        trust_remote_code=True
+    )
+    
+    # 创建pipeline
+    pipe = pipeline("text-generation", model=model, tokenizer=tokenizer)
+    
+    # 如果指定了GPU设备
+    if len(sys.argv) > 4:
+        model.to(f'cuda:{sys.argv[4]}')
 
 
 if __name__ == '__main__':
