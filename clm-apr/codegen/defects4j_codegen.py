@@ -55,14 +55,21 @@ def defects4j_codegen_input(config, input_file, tmp_dir='/tmp/codegen/'):
         
         filename = os.path.join('source', path)
         
-        # 移除stdout和stderr的重定向，让输出直接显示
-        result = subprocess.run(['defects4j', 'checkout', '-p', proj, '-v', bug_id + 'b', '-w', tmp_dir])
+        # 清理并重新创建临时目录
+        if os.path.exists(tmp_dir):
+            command(['rm', '-rf', tmp_dir])
+        os.makedirs(tmp_dir, exist_ok=True)
+            
+        # 直接checkout项目，移除init步骤
+        result = subprocess.run(
+            ['defects4j', 'checkout', '-p', proj, '-v', bug_id + 'b', '-w', '.'], 
+            cwd=tmp_dir
+        )
         if result.returncode != 0:
             print(f"Error checking out {proj}-{bug_id}")
             continue
             
         output, err = get_codegen_input(tmp_dir + path, start, end, config, tmp_file)
-        # 打印详细输出
         if output:
             print("Output:", output.decode())
         if err:
@@ -74,11 +81,6 @@ def defects4j_codegen_input(config, input_file, tmp_dir='/tmp/codegen/'):
         print(proj, bug_id, 'succeeded')
 
         result = json.load(open(tmp_file, 'r'))
-        if result['input'].strip() == '':
-            print(proj, bug_id, 'failed. all empty.')
-            continue
-        
-        result = json.load(open(tmp_file, 'r'))
         codegen_input['data'][filename] = {
             'loc': rem_loc,
             'input': result['input'],
@@ -88,8 +90,23 @@ def defects4j_codegen_input(config, input_file, tmp_dir='/tmp/codegen/'):
         command(['rm', '-rf', tmp_file])
         command(['rm', '-rf', tmp_dir])
         json.dump(codegen_input, open(input_file, 'w'), indent=2)
+        break
 
 def defects4j_codegen_output(input_file, output_file, num_output=10):
+    try:
+        import auto_gptq
+    except ImportError:
+        print("Installing required packages...")
+        # 使用预编译的wheel包
+        subprocess.check_call([
+            sys.executable, 
+            "-m", 
+            "pip", 
+            "install", 
+            "--find-links", "https://huggingface.co/AutoGPTQ/AutoGPTQ/tree/main/wheels/",
+            "auto-gptq"
+        ])
+        
     codegen_output = json.load(open(input_file, 'r'))
     codegen_output['model'] = 'Qwen2.5-Coder-0.5B'
     
