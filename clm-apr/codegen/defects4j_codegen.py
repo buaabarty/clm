@@ -110,8 +110,8 @@ def defects4j_codegen_output(input_file, output_file, num_output=10):
     codegen_output = json.load(open(input_file, 'r'))
     codegen_output['model'] = 'Qwen2.5-Coder-0.5B'
     
-    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-Coder-0.5B-Instruct-GPTQ-Int4", trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-Coder-0.5B-Instruct-GPTQ-Int4", trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained("/root/autodl-tmp/CodeLlama-13B-Instruct-GPTQ", trust_remote_code=True)
+    model = AutoModelForCausalLM.from_pretrained("/root/autodl-tmp/CodeLlama-13B-Instruct-GPTQ", trust_remote_code=True)
     model.to('cuda:0')
     
     for filename in codegen_output['data']:
