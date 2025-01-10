@@ -135,22 +135,44 @@ def defects4j_codegen_output(input_file, output_file, num_output=10):
     # 处理每个输入样本
     for filename in codegen_output['data']:
         print(f"Processing {filename}...")
-        input_text = codegen_output['data'][filename]['input']
+        code = codegen_output['data'][filename]['input']
         
         # 生成多个输出
         outputs = []
         for _ in range(num_output):
-            response = pipe(
-                input_text,
-                max_length=2048,
-                num_return_sequences=1,
-                temperature=0.7,
-                top_p=0.95,
-                do_sample=True
-            )[0]['generated_text']
+            # 构建 prompt
+            prompt = f"[INST] This is an incorrect code({filename}):\n```java\n{code}\n```\nYou are a software engineer. Can you repair the incorrect code?\n[/INST]\n```java\n"
+            print(f"Prompt: {prompt}", flush=True)
             
-            # 只保留生成的部分（去掉输入部分）
-            generated_code = response[len(input_text):].strip()
+            # 计算 token 长度以控制生成长度
+            cnt = len(tokenizer.tokenize(prompt))
+            max_d = 500 - cnt
+            
+            while True:
+                response = pipe(
+                    prompt,
+                    min_length=cnt+64,
+                    max_length=cnt+max_d,
+                    temperature=1.0,
+                    do_sample=True
+                )[0]['generated_text']
+                
+                # 提取生成的代码
+                try:
+                    generated_code = response.split('[/INST]')[1].strip()
+                    if generated_code.startswith('```java\n'):
+                        generated_code = generated_code[8:]
+                    if generated_code.endswith('```'):
+                        generated_code = generated_code[:-3]
+                    generated_code = generated_code.strip()
+                    
+                    if generated_code != '':
+                        break
+                except:
+                    pass
+                
+                max_d = min(2000 - cnt, max_d + 500)
+            
             outputs.append(generated_code)
             
         # 保存生成结果
